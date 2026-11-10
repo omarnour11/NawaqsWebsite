@@ -902,10 +902,19 @@
       updateCounter();
     }
 
-    function updateCounter() {
+    async function updateCounter() {
       const base = 1480;
+      let dbCount = 0;
+      try {
+        const res = await fetch('/api/wishlist/stats');
+        if (res.ok) {
+          const data = await res.json();
+          dbCount = data.total || 0;
+        }
+      } catch (_) {}
       const localCount = getLocalLeads().length;
-      document.getElementById('leads-counter').innerText = (base + localCount).toLocaleString('ar-EG');
+      const displayTotal = base + Math.max(localCount, dbCount);
+      document.getElementById('leads-counter').innerText = displayTotal.toLocaleString('ar-EG');
     }
 
     // ─── 4. Form Submission ────────────────────────────────────────
@@ -934,7 +943,7 @@
       }
 
       const cleanPhone = phoneRaw.replace(/\s+/g, '').replace(/^(\+20|0020)/, '0');
-      const refCode = 'NWQ-WL-' + Math.floor(1000 + Math.random() * 9000);
+      let refCode = 'NWQ-WL-' + Math.floor(1000 + Math.random() * 9000);
       const nowIso = new Date().toISOString();
 
       const leadRecord = {
@@ -953,15 +962,22 @@
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<span>جاري الحفظ... ⏳</span>';
 
-      // 1. Try sending to backend endpoint if running
+      // 1. Send to persistent backend API
       try {
-        await fetch('/api/wishlist', {
+        const resp = await fetch('/api/wishlist', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(leadRecord)
         });
+        if (resp.ok) {
+          const resData = await resp.json();
+          if (resData.lead?.id) {
+            refCode = resData.lead.id;
+            leadRecord.id = refCode;
+          }
+        }
       } catch (_) {
-        // Backend offline or static: fallback to client persistence
+        // Fallback to client persistence if offline
       }
 
       // 2. Always persist to localStorage
