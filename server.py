@@ -32,7 +32,7 @@ if os.path.exists(env_file):
         print(f"[Warning] Could not load .env: {e}")
 
 PORT = int(os.environ.get("PORT", 8080))
-ADMIN_KEY = os.environ.get("ADMIN_SECRET_KEY", "0102014+omarO").strip()
+ADMIN_KEY = os.environ.get("ADMIN_SECRET_KEY", "").strip()
 
 CSV_FILE = os.path.join(BASE_DIR, "wishlist_leads.csv")
 JSON_FILE = os.path.join(BASE_DIR, "wishlist_leads.json")
@@ -182,7 +182,7 @@ class NawaqssWishlistHandler(SimpleHTTPRequestHandler):
         # ── Protected Admin CSV Export ──
         if pathname in ("/api/admin/export", "/api/wishlist/export"):
             req_key = query.get("key", [""])[0].strip()
-            if req_key != ADMIN_KEY:
+            if not ADMIN_KEY or req_key != ADMIN_KEY:
                 self.send_response(401)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
@@ -206,7 +206,7 @@ class NawaqssWishlistHandler(SimpleHTTPRequestHandler):
         # ── Protected Admin Leads Data API ──
         if pathname == "/api/admin/leads":
             req_key = query.get("key", [""])[0].strip()
-            if req_key != ADMIN_KEY:
+            if not ADMIN_KEY or req_key != ADMIN_KEY:
                 self.send_response(401)
                 self.send_header("Content-Type", "application/json; charset=utf-8")
                 self.end_headers()
@@ -270,7 +270,7 @@ def run():
     print(f"✨ Nawaqss Wishlist Production Server is running on port: {PORT}")
     print(f"🌐 Public Landing Page:  http://localhost:{PORT}/")
     print(f"🔐 Protected Admin:       http://localhost:{PORT}/admin.html")
-    print(f"🔑 Current Admin Key:     {ADMIN_KEY}")
+    print(f"🔑 Admin Key configured:  {'yes' if ADMIN_KEY else 'NO - set ADMIN_SECRET_KEY'}")
     print(f"📁 Leads CSV:            {CSV_FILE}")
     print(f"📁 Leads JSON:           {JSON_FILE}")
     print("=" * 65)

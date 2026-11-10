@@ -40,12 +40,12 @@
 `http://your-domain.com/admin` أو `http://localhost:8080/admin`
 
 - سيُطلب منك إدخال **المفتاح السري (Admin Secret Key)**.
-- المفتاح الافتراضي هو: `0102014+omarO` (يمكنك تغييره بسهولة عبر المتغير `ADMIN_SECRET_KEY`).
+- المفتاح يُحدد عبر متغير البيئة `ADMIN_SECRET_KEY` (لا يوجد مفتاح افتراضي، ولا تضع المفتاح الحقيقي داخل ملفات المستودع).
 - بعد إدخال المفتاح ستظهر لك الإحصائيات الفورية وجدول المسجلين، مع زر مباشر لتحميل ملف الإكسيل `nawaqss_wishlist_leads.csv`.
 
 ### رابط التحميل المباشر السري (للاستخدام التلقائي):
 ```
-http://your-domain.com/api/admin/export?key=0102014+omarO
+http://your-domain.com/api/admin/export?key=YOUR_ADMIN_SECRET_KEY
 ```
 
 ---

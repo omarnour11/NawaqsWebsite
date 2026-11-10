@@ -33,7 +33,7 @@ if (fs.existsSync(envFile)) {
 }
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
-const ADMIN_KEY = (process.env.ADMIN_SECRET_KEY || '0102014+omarO').trim();
+const ADMIN_KEY = (process.env.ADMIN_SECRET_KEY || '').trim();
 
 const CSV_FILE = path.join(BASE_DIR, 'wishlist_leads.csv');
 const JSON_FILE = path.join(BASE_DIR, 'wishlist_leads.json');
@@ -187,7 +187,7 @@ const server = http.createServer((req, res) => {
   // ── Protected Admin CSV Export ──
   if (req.method === 'GET' && (pathname === '/api/admin/export' || pathname === '/api/wishlist/export')) {
     const reqKey = (query.key || '').trim();
-    if (reqKey !== ADMIN_KEY) {
+    if (!ADMIN_KEY || reqKey !== ADMIN_KEY) {
       res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: 'غير مصرح: مفتاح الإدارة غير صحيح أو مفقود. استخدم ?key=YOUR_KEY' }));
       return;
@@ -209,7 +209,7 @@ const server = http.createServer((req, res) => {
   // ── Protected Admin Leads Data API ──
   if (req.method === 'GET' && pathname === '/api/admin/leads') {
     const reqKey = (query.key || '').trim();
-    if (reqKey !== ADMIN_KEY) {
+    if (!ADMIN_KEY || reqKey !== ADMIN_KEY) {
       res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: 'المفتاح السري غير صحيح' }));
       return;
@@ -280,7 +280,7 @@ server.listen(PORT, () => {
   console.log(`✨ Nawaqss Wishlist Production Server is running on port: ${PORT}`);
   console.log(`🌐 Public Landing Page:  http://localhost:${PORT}/`);
   console.log(`🔐 Protected Admin:       http://localhost:${PORT}/admin.html`);
-  console.log(`🔑 Current Admin Key:     ${ADMIN_KEY}`);
+  console.log(`🔑 Admin Key configured:  ${ADMIN_KEY ? 'yes' : 'NO - set ADMIN_SECRET_KEY'}`);
   console.log(`📁 Leads CSV:            ${CSV_FILE}`);
   console.log(`📁 Leads JSON:           ${JSON_FILE}`);
   console.log('='.repeat(65));
