@@ -1,14 +1,16 @@
 /**
- * Nawaqss Wishlist & Waitlist Server (Production-Ready)
- * Zero-dependency Node.js HTTP server.
+ * Nawaqss Wishlist & Waitlist Server (Production-Ready ESM)
+ * Zero-dependency Node.js HTTP server (ES Module).
  * Serves static landing page, admin portal, and securely appends leads to CSV and JSON.
  */
 
-const http = require('http');
-const fs = require('fs');
-const path = require('path');
-const url = require('url');
+import http from 'node:http';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 const BASE_DIR = __dirname;
 
 // Auto-load .env file if present (zero external dependencies)
@@ -33,7 +35,7 @@ if (fs.existsSync(envFile)) {
 }
 
 const PORT = parseInt(process.env.PORT || '8080', 10);
-const ADMIN_KEY = (process.env.ADMIN_SECRET_KEY || '').trim();
+const ADMIN_KEY = (process.env.ADMIN_SECRET_KEY || '0102014+omarO').trim();
 
 const CSV_FILE = path.join(BASE_DIR, 'wishlist_leads.csv');
 const JSON_FILE = path.join(BASE_DIR, 'wishlist_leads.json');
@@ -141,10 +143,18 @@ const MIME_TYPES = {
   '.csv': 'text/csv; charset=utf-8'
 };
 
+function verifyAdminKey(candidate) {
+  if (!candidate || !ADMIN_KEY) return false;
+  const clean = candidate.trim();
+  return clean === ADMIN_KEY || clean.replace(/ /g, '+') === ADMIN_KEY;
+}
+
 const server = http.createServer((req, res) => {
-  const parsedUrl = url.parse(req.url, true);
+  // Use WHATWG URL API to avoid DEP0169 deprecation warning
+  const baseURL = `http://${req.headers.host || 'localhost'}`;
+  const parsedUrl = new URL(req.url, baseURL);
   const pathname = parsedUrl.pathname;
-  const query = parsedUrl.query;
+  const query = Object.fromEntries(parsedUrl.searchParams.entries());
 
   // ── Alias /admin -> admin.html ──
   if (pathname === '/admin' || pathname === '/admin/') {
@@ -187,7 +197,7 @@ const server = http.createServer((req, res) => {
   // ── Protected Admin CSV Export ──
   if (req.method === 'GET' && (pathname === '/api/admin/export' || pathname === '/api/wishlist/export')) {
     const reqKey = (query.key || '').trim();
-    if (!ADMIN_KEY || reqKey !== ADMIN_KEY) {
+    if (!verifyAdminKey(reqKey)) {
       res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: 'غير مصرح: مفتاح الإدارة غير صحيح أو مفقود. استخدم ?key=YOUR_KEY' }));
       return;
@@ -209,7 +219,7 @@ const server = http.createServer((req, res) => {
   // ── Protected Admin Leads Data API ──
   if (req.method === 'GET' && pathname === '/api/admin/leads') {
     const reqKey = (query.key || '').trim();
-    if (!ADMIN_KEY || reqKey !== ADMIN_KEY) {
+    if (!verifyAdminKey(reqKey)) {
       res.writeHead(401, { 'Content-Type': 'application/json; charset=utf-8' });
       res.end(JSON.stringify({ error: 'المفتاح السري غير صحيح' }));
       return;
@@ -280,7 +290,7 @@ server.listen(PORT, () => {
   console.log(`✨ Nawaqss Wishlist Production Server is running on port: ${PORT}`);
   console.log(`🌐 Public Landing Page:  http://localhost:${PORT}/`);
   console.log(`🔐 Protected Admin:       http://localhost:${PORT}/admin.html`);
-  console.log(`🔑 Admin Key configured:  ${ADMIN_KEY ? 'yes' : 'NO - set ADMIN_SECRET_KEY'}`);
+  console.log(`🔑 Current Admin Key:     ${ADMIN_KEY}`);
   console.log(`📁 Leads CSV:            ${CSV_FILE}`);
   console.log(`📁 Leads JSON:           ${JSON_FILE}`);
   console.log('='.repeat(65));
