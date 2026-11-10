@@ -3,7 +3,7 @@ import { desc, count } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { wishlistLeads } from "../../db/schema.js";
 
-const ADMIN_KEY = (process.env.ADMIN_SECRET_KEY || "0102014+omarO").trim();
+const ADMIN_KEY = (process.env.ADMIN_SECRET_KEY || "").trim();
 
 const CSV_HEADERS = [
   "كود الطلب",
@@ -126,7 +126,7 @@ export default async (req: Request, context: Context) => {
     // ── 2. GET /api/admin/leads — Admin dashboard data ──
     if (req.method === "GET" && pathname === "/api/admin/leads") {
       const key = (url.searchParams.get("key") || "").trim();
-      if (key !== ADMIN_KEY) {
+      if (!ADMIN_KEY || key !== ADMIN_KEY) {
         return Response.json(
           { error: "المفتاح السري غير صحيح" },
           { status: 401, headers: CORS_HEADERS }
@@ -175,7 +175,7 @@ export default async (req: Request, context: Context) => {
       (pathname === "/api/admin/export" || pathname === "/api/wishlist/export")
     ) {
       const key = (url.searchParams.get("key") || "").trim();
-      if (key !== ADMIN_KEY) {
+      if (!ADMIN_KEY || key !== ADMIN_KEY) {
         return Response.json(
           {
             error:

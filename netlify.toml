@@ -1,5 +1,7 @@
 [build]
-  publish = "."
+  # Publish only the static site files (not server scripts, data files or node_modules)
+  command = "rm -rf dist && mkdir -p dist && cp -r index.html admin.html assets dist/"
+  publish = "dist"
 
 [functions]
   directory = "netlify/functions"
