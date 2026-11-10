@@ -156,11 +156,20 @@ const server = http.createServer((req, res) => {
   const pathname = parsedUrl.pathname;
   const query = Object.fromEntries(parsedUrl.searchParams.entries());
 
-  // ── Alias /admin -> admin.html ──
-  if (pathname === '/admin' || pathname === '/admin/') {
-    res.writeHead(302, { 'Location': '/admin.html' });
-    res.end();
-    return;
+  // ── Serve /admin directly with 200 OK (Clean URLs support) ──
+  if (pathname === '/admin' || pathname === '/admin/' || pathname === '/admin.html' || pathname === '/admin/index.html') {
+    const adminPath = path.join(BASE_DIR, 'admin.html');
+    if (fs.existsSync(adminPath)) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      fs.createReadStream(adminPath).pipe(res);
+      return;
+    }
+    const adminIndexPath = path.join(BASE_DIR, 'admin', 'index.html');
+    if (fs.existsSync(adminIndexPath)) {
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      fs.createReadStream(adminIndexPath).pipe(res);
+      return;
+    }
   }
 
   // ── POST /api/wishlist ──
@@ -279,7 +288,17 @@ const server = http.createServer((req, res) => {
   let safePath = path.normalize(pathname).replace(/^(\.\.[\/\\])+/, '');
   if (safePath === '/' || safePath === '\\') safePath = '/index.html';
 
-  const filePath = path.join(BASE_DIR, safePath);
+  let filePath = path.join(BASE_DIR, safePath);
+
+  // If path is a directory, look for index.html inside it
+  if (fs.existsSync(filePath) && fs.statSync(filePath).isDirectory()) {
+    const indexInDir = path.join(filePath, 'index.html');
+    if (fs.existsSync(indexInDir)) {
+      filePath = indexInDir;
+    }
+  } else if (!fs.existsSync(filePath) && fs.existsSync(filePath + '.html')) {
+    filePath = filePath + '.html';
+  }
 
   fs.stat(filePath, (err, stats) => {
     if (err || !stats.isFile()) {
