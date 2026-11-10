@@ -230,6 +230,19 @@
         const merged = mergeLeads(serverData?.leads || []);
         allLeads = merged;
 
+                // Auto-sync any local leads to server in the background
+        const local = getLocalLeads();
+        const serverLeadIds = new Set((serverData?.leads || []).map(l => l.id || l.phone));
+        for (const l of local) {
+          if (l && !serverLeadIds.has(l.id || l.phone)) {
+            fetch('/api/wishlist', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(l)
+            }).catch(() => {});
+          }
+        }
+
         showDashboard({
           total: merged.length,
           patients: merged.filter(l => l.role === 'مريض').length,
@@ -307,51 +320,54 @@
         alert('يرجى تسجيل الدخول أولاً');
         return;
       }
-      const csvUrl = `/api/admin/export?key=${encodeURIComponent(currentKey)}`;
-      fetch(csvUrl)
-        .then(r => {
-          if (!r.ok) throw new Error('fallback');
-          return r.blob();
-        })
-        .then(blob => {
-          const u = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = u;
-          a.download = `nawaqss_leads_${Date.now()}.csv`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(u);
-        })
-        .catch(() => {
-          const headers = ['كود الطلب','تاريخ التسجيل (UTC)','الصفة','الاسم بالكامل','رقم الموبايل','البريد الإلكتروني','المحافظة','المدينة أو المنطقة','طريقة التواصل المفضلة','ملاحظات إضافية','IP العميل'];
-          const escapeCsv = v => `"${String(v || '').replace(/"/g, '""')}"`;
-          let csv = '\uFEFF' + headers.map(escapeCsv).join(',') + '\r\n';
-          for (const l of allLeads) {
-            csv += [
-              l.id || '',
-              l.createdAt || '',
-              l.role || '',
-              l.fullName || '',
-              l.phone || '',
-              l.email || '',
-              l.governorate || '',
-              l.cityArea || '',
-              l.contactPreference || '',
-              l.notes || '',
-              l.clientIp || 'client'
-            ].map(escapeCsv).join(',') + '\r\n';
-          }
-          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-          const u = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = u;
-          a.download = `nawaqss_leads_${Date.now()}.csv`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          URL.revokeObjectURL(u);
-        });
+      if (!allLeads || allLeads.length === 0) {
+        alert('لا توجد بيانات مسجلين لتصديرها');
+        return;
+      }
+
+      // Export directly from allLeads to guarantee 100% of visible table rows are included
+      const headers = [
+        'كود الطلب',
+        'تاريخ التسجيل (UTC)',
+        'الصفة',
+        'الاسم بالكامل',
+        'رقم الموبايل',
+        'البريد الإلكتروني',
+        'المحافظة',
+        'المدينة أو المنطقة',
+        'طريقة التواصل المفضلة',
+        'ملاحظات إضافية',
+        'IP العميل'
+      ];
+
+      const escapeCsv = v => `"${String(v || '').replace(/"/g, '""')}"`;
+      let csv = '\uFEFF' + headers.map(escapeCsv).join(',') + '\r\n';
+
+      for (const l of allLeads) {
+        csv += [
+          l.id || '',
+          l.createdAt || '',
+          l.role || '',
+          l.fullName || '',
+          l.phone || '',
+          l.email || '',
+          l.governorate || '',
+          l.cityArea || '',
+          l.contactPreference || '',
+          l.notes || '',
+          l.clientIp || 'client'
+        ].map(escapeCsv).join(',') + '\r\n';
+      }
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const u = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = u;
+      a.download = `nawaqss_leads_${Date.now()}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(u);
     }
 
     function logout() {
