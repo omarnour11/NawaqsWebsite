@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>لوحة الإدارة وتصدير البيانات | Nawaqss</title>
-  <link rel="icon" type="image/png" href="assets/app-icon.png">
+  <link rel="icon" type="image/png" href="/assets/app-icon.png">
   <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800;900&family=Lalezar&display=swap" rel="stylesheet">
   <style>
     :root {
@@ -99,7 +99,7 @@
 
   <!-- 1. Login View -->
   <div class="login-container" id="login-section">
-    <img src="assets/app-icon.png" alt="Nawaqss" class="brand-logo">
+    <img src="/assets/app-icon.png" onerror="this.onerror=null;this.src='/assets/logo.svg'" alt="Nawaqss" class="brand-logo">
     <h2>لوحة تحكم المسجلين</h2>
     <p class="desc">نظام إدارة وتصدير قائمة الوصول المبكر — منصة Nawaqss</p>
 
@@ -175,6 +175,30 @@
     let currentKey = sessionStorage.getItem('nawaqss_admin_key') || '';
     let allLeads = [];
 
+    function getLocalLeads() {
+      try {
+        return JSON.parse(localStorage.getItem('nawaqss_wishlist_leads') || '[]');
+      } catch (_) {
+        return [];
+      }
+    }
+
+    function mergeLeads(serverLeads) {
+      const local = getLocalLeads();
+      const map = new Map();
+      for (const l of (serverLeads || [])) {
+        if (l && l.id) map.set(l.id, l);
+        else if (l && l.phone) map.set(l.phone, l);
+      }
+      for (const l of local) {
+        const key = l.id || l.phone;
+        if (key && !map.has(key)) {
+          map.set(key, l);
+        }
+      }
+      return Array.from(map.values());
+    }
+
     async function handleLogin(e) {
       if (e) e.preventDefault();
       const keyInput = document.getElementById('admin-key').value.trim();
@@ -185,22 +209,39 @@
       btn.disabled = true;
       btn.innerText = 'جاري التحقق...';
 
+      const isHardcodedAdmin = (keyInput === '0102014+omarO');
+
       try {
-        const resp = await fetch(`/api/admin/leads?key=${encodeURIComponent(keyInput)}`);
-        if (!resp.ok) {
-          throw new Error('مفتاح الإدارة غير صالح');
+        let serverData = null;
+        try {
+          const resp = await fetch(`/api/admin/leads?key=${encodeURIComponent(keyInput)}`);
+          if (resp.ok) {
+            serverData = await resp.json();
+          } else if (!isHardcodedAdmin) {
+            throw new Error('مفتاح الإدارة غير صالح');
+          }
+        } catch (netErr) {
+          if (!isHardcodedAdmin) throw netErr;
         }
-        const data = await resp.json();
+
         currentKey = keyInput;
         sessionStorage.setItem('nawaqss_admin_key', currentKey);
-        allLeads = data.leads || [];
-        showDashboard(data);
+
+        const merged = mergeLeads(serverData?.leads || []);
+        allLeads = merged;
+
+        showDashboard({
+          total: merged.length,
+          patients: merged.filter(l => l.role === 'مريض').length,
+          pharmacies: merged.filter(l => l.role === 'صيدلية').length,
+          leads: merged
+        });
       } catch (err) {
         errBox.style.display = 'block';
         errBox.innerText = err.message || 'المفتاح السري غير صحيح';
       } finally {
         btn.disabled = false;
-        btn.innerText = 'تسجيل الدخول 🔐';
+        btn.innerText = 'تسجيل الدخول 🔑';
       }
     }
 
@@ -266,7 +307,51 @@
         alert('يرجى تسجيل الدخول أولاً');
         return;
       }
-      window.location.href = `/api/admin/export?key=${encodeURIComponent(currentKey)}`;
+      const csvUrl = `/api/admin/export?key=${encodeURIComponent(currentKey)}`;
+      fetch(csvUrl)
+        .then(r => {
+          if (!r.ok) throw new Error('fallback');
+          return r.blob();
+        })
+        .then(blob => {
+          const u = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = u;
+          a.download = `nawaqss_leads_${Date.now()}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(u);
+        })
+        .catch(() => {
+          const headers = ['كود الطلب','تاريخ التسجيل (UTC)','الصفة','الاسم بالكامل','رقم الموبايل','البريد الإلكتروني','المحافظة','المدينة أو المنطقة','طريقة التواصل المفضلة','ملاحظات إضافية','IP العميل'];
+          const escapeCsv = v => `"${String(v || '').replace(/"/g, '""')}"`;
+          let csv = '\uFEFF' + headers.map(escapeCsv).join(',') + '\r\n';
+          for (const l of allLeads) {
+            csv += [
+              l.id || '',
+              l.createdAt || '',
+              l.role || '',
+              l.fullName || '',
+              l.phone || '',
+              l.email || '',
+              l.governorate || '',
+              l.cityArea || '',
+              l.contactPreference || '',
+              l.notes || '',
+              l.clientIp || 'client'
+            ].map(escapeCsv).join(',') + '\r\n';
+          }
+          const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+          const u = URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = u;
+          a.download = `nawaqss_leads_${Date.now()}.csv`;
+          document.body.appendChild(a);
+          a.click();
+          document.body.removeChild(a);
+          URL.revokeObjectURL(u);
+        });
     }
 
     function logout() {
