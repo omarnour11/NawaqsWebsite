@@ -34,11 +34,18 @@ if (fs.existsSync(envFile)) {
   }
 }
 
+import os from 'node:os';
+
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const ADMIN_KEY = (process.env.ADMIN_SECRET_KEY || '0102014+omarO').trim();
 
-const CSV_FILE = path.join(BASE_DIR, 'wishlist_leads.csv');
-const JSON_FILE = path.join(BASE_DIR, 'wishlist_leads.json');
+const IS_SERVERLESS = !!(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME || process.env.LAMBDA_TASK_ROOT);
+const STORAGE_DIR = IS_SERVERLESS ? os.tmpdir() : BASE_DIR;
+
+const CSV_FILE = path.join(STORAGE_DIR, 'wishlist_leads.csv');
+const JSON_FILE = path.join(STORAGE_DIR, 'wishlist_leads.json');
+
+let inMemoryRecords = [];
 
 const CSV_HEADERS = [
   'كود الطلب',
@@ -55,15 +62,32 @@ const CSV_HEADERS = [
 ];
 
 function initStorage() {
-  if (!fs.existsSync(CSV_FILE)) {
-    // Write UTF-8 BOM (\uFEFF) so Excel opens Arabic text correctly
-    const headerRow = '\uFEFF' + CSV_HEADERS.map(h => `"${h}"`).join(',') + '\r\n';
-    fs.writeFileSync(CSV_FILE, headerRow, 'utf8');
-    console.log(`[Storage] Initialized CSV: ${CSV_FILE}`);
-  }
-  if (!fs.existsSync(JSON_FILE)) {
-    fs.writeFileSync(JSON_FILE, JSON.stringify([], null, 2), 'utf8');
-    console.log(`[Storage] Initialized JSON: ${JSON_FILE}`);
+  try {
+    if (!fs.existsSync(CSV_FILE)) {
+      const seedCsv = path.join(BASE_DIR, 'wishlist_leads.csv');
+      if (fs.existsSync(seedCsv) && seedCsv !== CSV_FILE) {
+        fs.copyFileSync(seedCsv, CSV_FILE);
+      } else {
+        const headerRow = '\uFEFF' + CSV_HEADERS.map(h => `"${h}"`).join(',') + '\r\n';
+        fs.writeFileSync(CSV_FILE, headerRow, 'utf8');
+      }
+    }
+    if (!fs.existsSync(JSON_FILE)) {
+      const seedJson = path.join(BASE_DIR, 'wishlist_leads.json');
+      if (fs.existsSync(seedJson) && seedJson !== JSON_FILE) {
+        fs.copyFileSync(seedJson, JSON_FILE);
+      } else {
+        fs.writeFileSync(JSON_FILE, JSON.stringify([], null, 2), 'utf8');
+      }
+    }
+    if (fs.existsSync(JSON_FILE) && inMemoryRecords.length === 0) {
+      const parsed = JSON.parse(fs.readFileSync(JSON_FILE, 'utf8'));
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        inMemoryRecords = parsed;
+      }
+    }
+  } catch (err) {
+    console.warn('[Storage] Init warning:', err.message);
   }
 }
 
@@ -74,9 +98,9 @@ function escapeCsvField(val) {
 }
 
 function appendLead(leadData, clientIp) {
-  const refId = leadData.id || `NWQ-WL-${Date.now().toString().slice(-6)}`;
+  const refId = leadData.id || ('NWQ-WL-' + Date.now().toString().slice(-6));
   const createdAt = leadData.createdAt || new Date().toISOString();
-  const role = leadData.role || 'مريض';
+  const role = (leadData.role || 'مريض').trim();
   const fullName = (leadData.fullName || '').trim();
   const phone = (leadData.phone || '').trim();
   const email = (leadData.email || '').trim();
@@ -84,32 +108,6 @@ function appendLead(leadData, clientIp) {
   const city = (leadData.cityArea || '').trim();
   const contactPref = (leadData.contactPreference || 'whatsapp').trim();
   const notes = (leadData.notes || '').trim();
-
-  const row = [
-    refId,
-    createdAt,
-    role,
-    fullName,
-    phone,
-    email,
-    gov,
-    city,
-    contactPref,
-    notes,
-    clientIp
-  ].map(escapeCsvField).join(',') + '\r\n';
-
-  // 1. Append to CSV
-  fs.appendFileSync(CSV_FILE, row, 'utf8');
-
-  // 2. Append to JSON
-  let records = [];
-  try {
-    const raw = fs.readFileSync(JSON_FILE, 'utf8');
-    records = JSON.parse(raw);
-  } catch (e) {
-    records = [];
-  }
 
   const newRecord = {
     id: refId,
@@ -124,8 +122,37 @@ function appendLead(leadData, clientIp) {
     notes,
     clientIp
   };
-  records.push(newRecord);
-  fs.writeFileSync(JSON_FILE, JSON.stringify(records, null, 2), 'utf8');
+
+  // 1. Maintain in-memory records
+  const existingIdx = inMemoryRecords.findIndex(r => (r.id && r.id === refId) || (r.phone === phone && r.fullName === fullName));
+  if (existingIdx >= 0) {
+    inMemoryRecords[existingIdx] = newRecord;
+  } else {
+    inMemoryRecords.push(newRecord);
+  }
+
+  // 2. Persist to storage files in /tmp (or BASE_DIR on VPS)
+  try {
+    initStorage();
+    const row = [
+      refId,
+      createdAt,
+      role,
+      fullName,
+      phone,
+      email,
+      gov,
+      city,
+      contactPref,
+      notes,
+      clientIp
+    ].map(escapeCsvField).join(',') + '\r\n';
+
+    fs.appendFileSync(CSV_FILE, row, 'utf8');
+    fs.writeFileSync(JSON_FILE, JSON.stringify(inMemoryRecords, null, 2), 'utf8');
+  } catch (err) {
+    console.warn('[Storage Error] Could not update files (memory preserved):', err.message);
+  }
 
   return newRecord;
 }
@@ -172,14 +199,11 @@ const server = http.createServer((req, res) => {
     }
   }
 
-  // ── POST /api/wishlist ──
+  // ── POST /api/wishlist (Vercel Serverless & Node Compatible) ──
   if (req.method === 'POST' && pathname === '/api/wishlist') {
-    let body = '';
-    req.on('data', chunk => { body += chunk.toString(); });
-    req.on('end', () => {
+    const handlePayload = (data) => {
       try {
-        const data = JSON.parse(body);
-        let clientIp = req.headers['x-forwarded-for'] || req.socket.remoteAddress || '127.0.0.1';
+        let clientIp = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
         if (clientIp.includes(',')) {
           clientIp = clientIp.split(',')[0].trim();
         }
@@ -195,6 +219,30 @@ const server = http.createServer((req, res) => {
           lead: saved
         }));
         console.log(`[Lead] ${saved.role}: ${saved.fullName} (${saved.phone}) - ${saved.governorate}`);
+      } catch (err) {
+        console.error('[Error] Failed to save lead:', err);
+        res.writeHead(500, { 'Content-Type': 'application/json; charset=utf-8' });
+        res.end(JSON.stringify({ error: 'Server error saving lead' }));
+      }
+    };
+
+    // If running under Vercel / Serverless with body pre-parsed:
+    if (req.body !== undefined && req.body !== null) {
+      let data = req.body;
+      if (typeof data === 'string') {
+        try { data = JSON.parse(data); } catch (_) { data = {}; }
+      }
+      handlePayload(data);
+      return;
+    }
+
+    // Standard Node.js stream:
+    let body = '';
+    req.on('data', chunk => { body += chunk.toString(); });
+    req.on('end', () => {
+      try {
+        const data = body ? JSON.parse(body) : {};
+        handlePayload(data);
       } catch (err) {
         res.writeHead(400, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({ error: 'Invalid JSON payload' }));
@@ -235,9 +283,11 @@ const server = http.createServer((req, res) => {
     }
 
     initStorage();
-    let records = [];
+    let records = inMemoryRecords;
     try {
-      records = JSON.parse(fs.readFileSync(JSON_FILE, 'utf8'));
+      if (fs.existsSync(JSON_FILE)) {
+        records = JSON.parse(fs.readFileSync(JSON_FILE, 'utf8'));
+      }
     } catch (_) {}
 
     const reversed = [...records].reverse();
@@ -259,9 +309,11 @@ const server = http.createServer((req, res) => {
   // ── Public Safe Stats ──
   if (req.method === 'GET' && pathname === '/api/wishlist/stats') {
     initStorage();
-    let records = [];
+    let records = inMemoryRecords;
     try {
-      records = JSON.parse(fs.readFileSync(JSON_FILE, 'utf8'));
+      if (fs.existsSync(JSON_FILE)) {
+        records = JSON.parse(fs.readFileSync(JSON_FILE, 'utf8'));
+      }
     } catch (_) {}
 
     res.writeHead(200, {
