@@ -1,0 +1,15 @@
+services:
+  nawaqss-wishlist:
+    build: .
+    container_name: nawaqss-wishlist
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - PORT=8080
+      - ADMIN_SECRET_KEY=0102014+omarO
+      - API_TOKEN=48bb890136d5d792c6f1e3355c0e2b71aa18173b01a2ea557e82dedc33c52dc2
+    volumes:
+      # Persist CSV and JSON leads files on the host machine
+      - ./wishlist_leads.csv:/app/wishlist_leads.csv
+      - ./wishlist_leads.json:/app/wishlist_leads.json
