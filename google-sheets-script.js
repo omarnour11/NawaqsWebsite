@@ -1,20 +1,8 @@
 /**
  * ============================================================================
  * كود Google Apps Script لمزامنة بيانات منصة نواقص (Nawaqss Leads) مع Google Sheets
+ * مع خاصية منع التكرار (Deduplication) التلقائية الذكية
  * ============================================================================
- * 
- * طريقة الاستخدام في دقيقة واحدة:
- * 1. افتح شيت جديد في Google Sheets (سمّه مثلاً: Nawaqss Leads).
- * 2. من القائمة العلوية اضغط: Extensions (التوسيعات) -> Apps Script.
- * 3. امسح أي كود موجود هناك، والصق هذا الكود بالكامل.
- * 4. اضغط على الزر الأزرق: Deploy (نشر) -> New deployment (نشر جديد).
- * 5. اضغط على الترس بجانب "Select type" واختر: Web app (تطبيق ويب).
- * 6. في خانة "Who has access" (من يملك حق الوصول)، اختر: Anyone (أي مستخدم) - مهم جداً!
- * 7. اضغط Deploy وامنح الأذونات (Authorize access).
- * 8. انسخ الرابط الذي يظهر لك (Web app URL) وضعه في إعدادات Vercel أو ملف .env كـ:
- *    GOOGLE_SHEET_WEBHOOK_URL=https://script.google.com/macros/s/XXXXX/exec
- * 
- * مبروك! الآن أي تسجيل جديد في الموقع سيظهر في شيت الإكسيل فوراً ولن يُمسح أبداً!
  */
 
 function doPost(e) {
@@ -25,7 +13,7 @@ function doPost(e) {
     var doc = SpreadsheetApp.getActiveSpreadsheet();
     var sheet = doc.getActiveSheet();
 
-    // تأكد من وجود صف العناوين في البداية
+    // 1. تأكد من وجود صف العناوين في البداية
     if (sheet.getLastRow() === 0) {
       sheet.appendRow([
         'كود الطلب',
@@ -40,7 +28,6 @@ function doPost(e) {
         'ملاحظات إضافية',
         'IP العميل'
       ]);
-      // تنسيق صف العناوين
       var headerRange = sheet.getRange(1, 1, 1, 11);
       headerRange.setBackground('#0E7C6B');
       headerRange.setFontColor('#FFFFFF');
@@ -52,12 +39,36 @@ function doPost(e) {
       data = JSON.parse(e.postData.contents);
     }
 
+    // 2. فحص ومنع التكرار (Deduplication):
+    // إذا كان كود الطلب موجوداً مسبقاً أو تكرر نفس رقم الموبايل والاسم في نفس اليوم، لا يتم تكراره
+    if (sheet.getLastRow() > 1 && (data.id || data.phone)) {
+      var allRows = sheet.getDataRange().getValues();
+      var cleanNewPhone = String(data.phone || '').replace(/\D/g, '');
+      var newName = String(data.fullName || '').trim().toLowerCase();
+
+      for (var i = 1; i < allRows.length; i++) {
+        var existingId = String(allRows[i][0] || '').trim();
+        var existingName = String(allRows[i][3] || '').trim().toLowerCase();
+        var existingPhone = String(allRows[i][4] || '').replace(/\D/g, '');
+
+        // إذا تطابق كود الطلب، أو تطابق رقم الموبايل والاسم
+        if ((data.id && existingId === data.id) || (cleanNewPhone && existingPhone === cleanNewPhone && existingName === newName)) {
+          return ContentService.createTextOutput(JSON.stringify({
+            result: 'ignored_duplicate',
+            message: 'تم منع التكرار، السجل مسجل بالفعل مسبقاً',
+            id: existingId
+          })).setMimeType(ContentService.MimeType.JSON);
+        }
+      }
+    }
+
+    // 3. إضافة الصف الجديد بدون تكرار
     sheet.appendRow([
       data.id || '',
       data.createdAt || new Date().toISOString(),
       data.role || 'مريض',
       data.fullName || '',
-      "'" + (data.phone || ''), // علامة ' لمنع إكسيل من إخفاء الصفر في بداية الرقم
+      "'" + (data.phone || ''), // علامة ' لمنع إكسيل من إخفاء الصفر الأول
       data.email || '',
       data.governorate || '',
       data.cityArea || '',
@@ -84,6 +95,6 @@ function doPost(e) {
 function doGet(e) {
   return ContentService.createTextOutput(JSON.stringify({
     status: 'active',
-    message: 'Nawaqss Google Sheets Webhook is ready'
+    message: 'Nawaqss Google Sheets Webhook is ready with deduplication support'
   })).setMimeType(ContentService.MimeType.JSON);
 }

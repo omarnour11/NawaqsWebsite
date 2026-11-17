@@ -962,7 +962,8 @@
       submitBtn.disabled = true;
       submitBtn.innerHTML = '<span>جاري الحفظ... ⏳</span>';
 
-      // 1. Send to persistent backend API
+      let backendSuccess = false;
+      // 1. Send to persistent backend API (which automatically syncs to Google Sheets)
       try {
         const resp = await fetch('/api/wishlist', {
           method: 'POST',
@@ -970,6 +971,7 @@
           body: JSON.stringify(leadRecord)
         });
         if (resp.ok) {
+          backendSuccess = true;
           const resData = await resp.json();
           if (resData.lead?.id) {
             refCode = resData.lead.id;
@@ -977,18 +979,20 @@
           }
         }
       } catch (_) {
-        // Fallback to client persistence if offline
+        // Fallback to direct client sync if backend is offline
       }
 
-      // 1.1 Direct redundant backup to Google Sheet
-      try {
-        fetch('https://script.google.com/macros/s/AKfycbx--zvjmKNmPJXMdDgI8zgS3luIvOqff_Ocpyj77SVbo9EAtBE1SZnZgJFKzDXBtR5aSQ/exec', {
-          method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(leadRecord)
-        }).catch(() => {});
-      } catch (_) {}
+      // 1.1 Direct fallback to Google Sheet ONLY if backend failed
+      if (!backendSuccess) {
+        try {
+          fetch('https://script.google.com/macros/s/AKfycbx--zvjmKNmPJXMdDgI8zgS3luIvOqff_Ocpyj77SVbo9EAtBE1SZnZgJFKzDXBtR5aSQ/exec', {
+            method: 'POST',
+            mode: 'no-cors',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(leadRecord)
+          }).catch(() => {});
+        } catch (_) {}
+      }
 
       // 2. Always persist to localStorage
       saveLocalLead(leadRecord);
