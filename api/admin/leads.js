@@ -1,4 +1,4 @@
-import { verifyAdminKey, getLeads } from '../_storage.js';
+import { verifyAdminKey, getLeads, getStorageInfo } from '../_storage.js';
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -14,12 +14,17 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized: Admin key is invalid' });
   }
 
-  const leads = getLeads();
+  const leads = await getLeads();
+  const storageInfo = getStorageInfo();
   const patients = leads.filter(l => l.role === 'مريض').length;
   const pharmacies = leads.filter(l => l.role === 'صيدلية').length;
 
   return res.status(200).json({
     success: true,
+    storageType: storageInfo.type,
+    dbConnected: storageInfo.dbConnected,
+    googleSheetConnected: storageInfo.googleSheetConnected,
+    isServerless: storageInfo.isServerless,
     total: leads.length,
     patients,
     pharmacies,

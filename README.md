@@ -17,6 +17,37 @@
 
 ---
 
+## 💾 التخزين الدائم للبيانات وحل مشكلة مسح المسجلين على Vercel / Serverless
+
+> [!IMPORTANT]
+> عند النشر على منصات سحابية مثل **Vercel** أو **Netlify Functions**، يعمل السيرفر بنظام **Serverless Functions** (وظائف مؤقتة بدون أقراص تخزين دائمة). أي ملف يُكتب في السيرفر يُحفظ في `/tmp` ويتم مسحه تلقائياً عند سكون السيرفر.
+> **لذلك تم توفير حلين دائمين لحفظ البيانات للأبد دون أن تُمسح:**
+
+### الخيار الأول: ربط قاعدة بيانات سحابية دائمة مجانية (PostgreSQL / Supabase / Neon)
+1. أنشئ حساباً مجانياً على [Supabase](https://supabase.com) أو [Neon](https://neon.tech).
+2. انسخ رابط الاتصال (`Connection String / URI`).
+3. أضف الرابط في متغيرات بيئة Vercel أو ملف `.env`:
+   ```env
+   DATABASE_URL="postgresql://user:password@ep-xyz.neon.tech/neondb?sslmode=require"
+   ```
+4. **تلقائياً:** سيقوم الكود بإنشاء الجداول وحفظ جميع المسجلين الجدد بشكل دائم واسترجاعهم في لوحة الإدارة فوراً.
+
+---
+
+### الخيار الثاني: الربط المباشر مع Google Sheets (موصى به جداً)
+1. افتح شيت جديد في **Google Sheets**.
+2. من القائمة العلوية: **Extensions (التوسيعات) -> Apps Script**.
+3. امسح أي كود موجود والصق الكود الموجود في ملف `google-sheets-script.js`.
+4. اضغط **Deploy -> New deployment -> Web app**.
+5. في خانة **Who has access** اختر: **Anyone (أي شخص)**.
+6. انسخ الرابط الذي سيظهر لك وضعه في إعدادات Vercel أو ملف `.env`:
+   ```env
+   GOOGLE_SHEET_WEBHOOK_URL="https://script.google.com/macros/s/XXXXX/exec"
+   ```
+7. الآن كل تسجيل جديد سيظهر في شيت الإكسيل مباشرة ويبقى محفوظاً بأمان في حساب Google للأبد!
+
+---
+
 ## 📋 البيانات المخزنة في ملف الـ CSV
 يتم تخزين كل تسجيل في `wishlist_leads.csv` بالأعمدة التالية:
 - **كود الطلب** (مثل: `NWQ-WL-8491`)

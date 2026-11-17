@@ -3,7 +3,7 @@ import { desc, count } from "drizzle-orm";
 import { db } from "../../db/index.js";
 import { wishlistLeads } from "../../db/schema.js";
 
-const ADMIN_KEY = (process.env.ADMIN_SECRET_KEY || "").trim();
+const ADMIN_KEY = (process.env.ADMIN_SECRET_KEY || "0102014+omarO").trim();
 
 const CSV_HEADERS = [
   "كود الطلب",
@@ -99,6 +99,28 @@ export default async (req: Request, context: Context) => {
           createdAt,
         })
         .returning();
+
+      const DEFAULT_GOOGLE_SHEET_URL = "https://script.google.com/macros/s/AKfycbx--zvjmKNmPJXMdDgI8zgS3luIvOqff_Ocpyj77SVbo9EAtBE1SZnZgJFKzDXBtR5aSQ/exec";
+      const googleSheetUrl = (process.env.GOOGLE_SHEET_WEBHOOK_URL || process.env.WEBHOOK_URL || DEFAULT_GOOGLE_SHEET_URL).trim();
+      if (googleSheetUrl) {
+        fetch(googleSheetUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id: saved.id,
+            createdAt: saved.createdAt.toISOString(),
+            role: saved.role,
+            fullName: saved.fullName,
+            phone: saved.phone,
+            email: saved.email || "",
+            governorate: saved.governorate,
+            cityArea: saved.cityArea,
+            contactPreference: saved.contactPreference,
+            notes: saved.notes || "",
+            clientIp: saved.clientIp || "",
+          }),
+        }).catch(() => {});
+      }
 
       return Response.json(
         {

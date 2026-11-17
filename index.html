@@ -980,6 +980,16 @@
         // Fallback to client persistence if offline
       }
 
+      // 1.1 Direct redundant backup to Google Sheet
+      try {
+        fetch('https://script.google.com/macros/s/AKfycbx--zvjmKNmPJXMdDgI8zgS3luIvOqff_Ocpyj77SVbo9EAtBE1SZnZgJFKzDXBtR5aSQ/exec', {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(leadRecord)
+        }).catch(() => {});
+      } catch (_) {}
+
       // 2. Always persist to localStorage
       saveLocalLead(leadRecord);
 

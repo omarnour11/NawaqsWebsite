@@ -14,7 +14,7 @@ export default async function handler(req, res) {
     return res.status(401).json({ error: 'Unauthorized: Admin key is invalid' });
   }
 
-  const csv = generateCsv();
+  const csv = await generateCsv();
   const filename = 'nawaqss_wishlist_leads_' + new Date().toISOString().slice(0, 10) + '.csv';
 
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');

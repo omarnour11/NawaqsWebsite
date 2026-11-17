@@ -9,6 +9,6 @@ export default async function handler(req, res) {
     return res.status(204).end();
   }
 
-  const leads = getLeads();
+  const leads = await getLeads();
   return res.status(200).json({ success: true, total: leads.length });
 }

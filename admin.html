@@ -127,6 +127,9 @@
       </div>
     </div>
 
+    <!-- Storage Status Banner -->
+    <div id="storage-status-banner" style="margin-bottom: 20px; border-radius: 12px; padding: 14px 18px; font-size: 13.5px; line-height: 1.7; display: none;"></div>
+
     <!-- Quick Stats -->
     <div class="stats-grid">
       <div class="stat-card">
@@ -247,7 +250,11 @@
           total: merged.length,
           patients: merged.filter(l => l.role === 'مريض').length,
           pharmacies: merged.filter(l => l.role === 'صيدلية').length,
-          leads: merged
+          leads: merged,
+          storageType: serverData?.storageType,
+          dbConnected: serverData?.dbConnected,
+          googleSheetConnected: serverData?.googleSheetConnected,
+          isServerless: serverData?.isServerless
         });
       } catch (err) {
         errBox.style.display = 'block';
@@ -261,6 +268,44 @@
     function showDashboard(data) {
       document.getElementById('login-section').style.display = 'none';
       document.getElementById('dashboard-section').style.display = 'block';
+
+      const banner = document.getElementById('storage-status-banner');
+      if (banner && data) {
+        banner.style.display = 'block';
+        if (data.storageType === 'postgres' || data.dbConnected) {
+          banner.style.background = '#D8F3EA';
+          banner.style.border = '1.5px solid #0E7C6B';
+          banner.style.color = '#0A5A4E';
+          banner.innerHTML = `
+            <strong>🟢 التخزين الدائم متصل ونشط:</strong> قاعدة البيانات السحابية (PostgreSQL / Supabase / Neon) متصلة بنجاح.
+            ${data.googleSheetConnected ? ' <strong>| 📊 ومزامنة Google Sheets مفعلة ومباشرة.</strong>' : ''}
+            جميع التسجيلات الجديدة تُحفظ في قاعدة البيانات للأبد ولن تُمسح أبدًا.
+          `;
+        } else if (data.googleSheetConnected) {
+          banner.style.background = '#E0F2FE';
+          banner.style.border = '1.5px solid #0284C7';
+          banner.style.color = '#0369A1';
+          banner.innerHTML = `
+            <strong>🟢 مزامنة Google Sheets مفعلة:</strong> كل تسجيل جديد يُرسل فوراً إلى الشيت الخاص بك ويبقى محفوظاً دائماً في حساب Google.
+          `;
+        } else if (data.isServerless) {
+          banner.style.background = '#FFFBEB';
+          banner.style.border = '1.5px solid #F59E0B';
+          banner.style.color = '#B45309';
+          banner.innerHTML = `
+            <strong>⚠️ تنبيه مهم (استضافة Vercel بدون قاعدة بيانات):</strong> الموقع يعمل حالياً على ذاكرة Vercel المؤقتة (/tmp)، ولذلك تُمسح التسجيلات عند سكون السيرفر.
+            <br>
+            <strong>💡 للحل الدائم في دقيقة واحدة:</strong> أضف متغير <code>DATABASE_URL</code> (من Supabase أو Neon مجاناً) في إعدادات Vercel Environment Variables، أو أضف <code>GOOGLE_SHEET_WEBHOOK_URL</code> لحفظ المسجلين تلقائياً في Google Sheets.
+          `;
+        } else {
+          banner.style.background = '#F8FAFC';
+          banner.style.border = '1.5px solid #CBD5E1';
+          banner.style.color = '#334155';
+          banner.innerHTML = `
+            <strong>💾 التخزين المحلي:</strong> يتم حفظ المسجلين في ملفات السيرفر المحلية (wishlist_leads.json / csv).
+          `;
+        }
+      }
 
       document.getElementById('stat-total').innerText = (data.total || allLeads.length).toLocaleString('ar-EG');
       document.getElementById('stat-patients').innerText = (data.patients || allLeads.filter(l => l.role === 'مريض').length).toLocaleString('ar-EG');

@@ -24,12 +24,12 @@ export default async function handler(req, res) {
     }
 
     const clientIp = (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket?.remoteAddress || '127.0.0.1';
-    const saved = saveLead(body, clientIp);
+    const saved = await saveLead(body, clientIp);
     return res.status(200).json({ success: true, lead: saved });
   }
 
   if (req.method === 'GET') {
-    const leads = getLeads();
+    const leads = await getLeads();
     return res.status(200).json({ success: true, total: leads.length });
   }
 
